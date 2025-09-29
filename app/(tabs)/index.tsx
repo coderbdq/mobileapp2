@@ -1,34 +1,26 @@
 // app/(tabs)/index.tsx
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
-import { Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { Image } from "expo-image"; // dùng expo-image để tải/cached ảnh mượt Android
+import {
+  ActivityIndicator,
+  Dimensions,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { useProducts } from "../../hooks/useProducts";
+import { API_BASE_URL } from "../api/config";
 
 const { width } = Dimensions.get("window");
 const H_PADDING = 20;
 
-// Tạo link ảnh công khai theo từ khóa (Unsplash Source, không cần API key)
-const imageFromKeywords = (kw: string, w = 800, h = 600) =>
-  `https://source.unsplash.com/${w}x${h}/?${encodeURIComponent(kw)}`;
-
-// Danh sách sản phẩm: dùng keywords thay vì link ảnh cố định
-const PRODUCTS = [
-  { title: "Road Bike",      subtitle: "PEUGEOT - LR01",  price: "$ 1,999.99", keywords: "road bike bicycle", liked: true },
-  { title: "Road Helmet",    subtitle: "SMITH - Trade",   price: "$ 120",       keywords: "bicycle helmet",    accent: true },
-  { title: "Gravel Bike",    subtitle: "Canyon - Grizl",  price: "$ 2,399",     keywords: "gravel bike" },
-  { title: "Gloves",         subtitle: "Giro - Classic",  price: "$ 35",        keywords: "cycling gloves" },
-  { title: "City Bike",      subtitle: "VanMoof - S3",    price: "$ 2,298",     keywords: "city bike urban" },
-  { title: "MTB Helmet",     subtitle: "Fox - Rampage",   price: "$ 180",       keywords: "mountain bike helmet", accent: true },
-  { title: "Action Cam",     subtitle: "GoPro - Hero",    price: "$ 299",       keywords: "action camera gopro cycling" },
-  { title: "Bike Lock",      subtitle: "Kryptonite - U",  price: "$ 59",        keywords: "bike lock u-lock" },
-  { title: "Cycling Jersey", subtitle: "Rapha - Pro",     price: "$ 125",       keywords: "cycling jersey" },
-  { title: "Sunglasses",     subtitle: "Oakley - Sutro",  price: "$ 149",       keywords: "cycling sunglasses" },
-  { title: "Bottle Cage",    subtitle: "Elite - Custom",  price: "$ 18",        keywords: "bike bottle cage" },
-  { title: "Bike Light",     subtitle: "Cygolite - 850",  price: "$ 69",        keywords: "bike front light" },
-];
-
 export default function TabIndexScreen() {
+  const { data: products, isLoading, isError, refetch } = useProducts(30);
+
   return (
     <LinearGradient
       colors={["#0E1726", "#0C1E3A"]}
@@ -37,13 +29,13 @@ export default function TabIndexScreen() {
       style={{ flex: 1 }}
     >
       <ScrollView
-        contentContainerStyle={{ paddingBottom: 120 /* chừa chỗ cho tab overlay */ }}
+        contentContainerStyle={{ paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>Choose Your Bike</Text>
-          <Pressable style={styles.searchBtn}>
+          <Pressable style={styles.searchBtn} onPress={() => refetch()}>
             <Ionicons name="search" size={22} />
           </Pressable>
         </View>
@@ -60,12 +52,11 @@ export default function TabIndexScreen() {
             <View style={{ height: 14 }} />
           </View>
 
-          {/* Ảnh demo xe đạp trong promo */}
+          {/* Ảnh demo (có thể thay = banner API nếu backend có) */}
           <Image
-            source={{ uri: imageFromKeywords("road bike bicycle", 900, 600) }}
+            source={require("../../assets/images/products/peugeot-lr01.jpg")}
             contentFit="contain"
             cachePolicy="memory-disk"
-            transition={200}
             style={styles.promoImg}
           />
         </LinearGradient>
@@ -74,7 +65,9 @@ export default function TabIndexScreen() {
         <View style={styles.filterRow}>
           <FilterIcon icon={<Ionicons name="bicycle" size={18} />} />
           <FilterIcon icon={<Ionicons name="flash" size={18} />} />
-          <FilterIcon icon={<MaterialCommunityIcons name="speedometer" size={18} />} />
+          <FilterIcon
+            icon={<MaterialCommunityIcons name="speedometer" size={18} />}
+          />
           <FilterIcon icon={<MaterialCommunityIcons name="terrain" size={18} />} />
           <FilterIcon icon={<Ionicons name="settings-outline" size={18} />} />
         </View>
@@ -87,22 +80,52 @@ export default function TabIndexScreen() {
           <Segment label="Helmet" />
         </View>
 
-        {/* Cards grid */}
-        <View style={styles.grid}>
-          {PRODUCTS.map((p, idx) => (
-            <ProductCard
-              key={idx}
-              title={p.title}
-              subtitle={p.subtitle}
-              price={p.price}
-              keywords={p.keywords}
-              liked={p.liked}
-              accent={p.accent}
-            />
-          ))}
-        </View>
+        {/* Loading/Error */}
+        {isLoading && (
+          <View style={{ paddingTop: 40 }}>
+            <ActivityIndicator color="#9EC5FF" />
+            <Text
+              style={{
+                color: "#C9D6FF",
+                textAlign: "center",
+                marginTop: 8,
+              }}
+            >
+              Loading…
+            </Text>
+          </View>
+        )}
 
-        {/* spacer nhỏ để tránh bubble tab che chữ cuối */}
+        {isError && (
+          <Text style={{ color: "tomato", textAlign: "center", marginTop: 20 }}>
+            Lỗi load dữ liệu. Kiểm tra lại API_BASE_URL hoặc Laravel server!
+          </Text>
+        )}
+
+        {/* Cards grid */}
+        {!isLoading && !isError && (
+          <View style={styles.grid}>
+            {products?.map((p) => {
+              const uri =
+                p.image_url && !p.image_url.startsWith("http")
+                  ? `${API_BASE_URL}${p.image_url}`
+                  : p.image_url || undefined;
+
+              return (
+                <ProductCard
+                  key={p.id}
+                  title={p.title}
+                  subtitle={p.subtitle}
+                  price={p.priceText}
+                  imageUrl={uri}
+                  liked={Math.random() > 0.7}
+                  accent={Math.random() > 0.6}
+                />
+              );
+            })}
+          </View>
+        )}
+
         <View style={{ height: 20 }} />
       </ScrollView>
     </LinearGradient>
@@ -132,7 +155,11 @@ function Segment({ label, active = false }: { label: string; active?: boolean })
       end={{ x: 1, y: 1 }}
       style={[styles.segment, active && { shadowOpacity: 0.35, elevation: 6 }]}
     >
-      <Text style={[styles.segmentText, active && { color: "#fff", fontWeight: "700" }]}>{label}</Text>
+      <Text
+        style={[styles.segmentText, active && { color: "#fff", fontWeight: "700" }]}
+      >
+        {label}
+      </Text>
     </LinearGradient>
   );
 }
@@ -140,7 +167,11 @@ function Segment({ label, active = false }: { label: string; active?: boolean })
 function Heart({ filled }: { filled?: boolean }) {
   return (
     <View style={styles.heartWrap}>
-      <Ionicons name={filled ? "heart" : "heart-outline"} size={18} color={filled ? "#FF6B81" : "#fff"} />
+      <Ionicons
+        name={filled ? "heart" : "heart-outline"}
+        size={18}
+        color={filled ? "#FF6B81" : "#fff"}
+      />
     </View>
   );
 }
@@ -149,14 +180,14 @@ function ProductCard({
   title,
   subtitle,
   price,
-  keywords,
+  imageUrl,
   liked,
   accent,
 }: {
   title: string;
-  subtitle: string;
+  subtitle?: string;
   price: string;
-  keywords?: string;
+  imageUrl?: string;
   liked?: boolean;
   accent?: boolean;
 }) {
@@ -168,19 +199,19 @@ function ProductCard({
       style={styles.card}
     >
       <Heart filled={liked} />
-
-      {/* Ảnh theo từ khóa (cache + transition mượt) */}
       <Image
-        source={{ uri: imageFromKeywords(keywords || title, 800, 600) }}
+        source={
+          imageUrl
+            ? { uri: imageUrl }
+            : require("../../assets/images/products/peugeot-lr01.jpg")
+        }
         style={styles.cardImg}
         contentFit="cover"
         cachePolicy="memory-disk"
-        transition={200}
       />
-
       <View style={{ gap: 2 }}>
         <Text style={styles.cardTitle}>{title}</Text>
-        <Text style={styles.cardSub}>{subtitle}</Text>
+        {!!subtitle && <Text style={styles.cardSub}>{subtitle}</Text>}
       </View>
       <Text style={styles.cardPrice}>{price}</Text>
     </LinearGradient>
@@ -296,7 +327,7 @@ const styles = StyleSheet.create({
     rowGap: 14,
   },
   card: {
-    width: (width - H_PADDING * 2 - 12) / 2, // 2 cột
+    width: (width - H_PADDING * 2 - 12) / 2,
     padding: 12,
     borderRadius: 18,
     gap: 8,
